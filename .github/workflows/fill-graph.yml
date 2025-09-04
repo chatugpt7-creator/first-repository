@@ -1,0 +1,53 @@
+name: Fill Contribution Graph
+
+on:
+  workflow_dispatch:
+    inputs:
+      total_commits:
+        description: "How many commits to generate"
+        required: false
+        default: "500"
+      spread_days:
+        description: "Spread commits over the last N days"
+        required: false
+        default: "365"
+
+permissions:
+  contents: write
+
+jobs:
+  fill:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: true  # lets us push using GITHUB_TOKEN
+
+      - name: Configure author to you
+        run: |
+          git config user.name "${{ github.actor }}"
+          git config user.email "${{ secrets.GH_EMAIL }}"
+
+      - name: Generate commits
+        env:
+          TOTAL: ${{ github.event.inputs.total_commits || '500' }}
+          SPREAD: ${{ github.event.inputs.spread_days || '365' }}
+        shell: bash
+        run: |
+          mkdir -p commits
+          touch commits/log.txt
+          for i in $(seq 1 "$TOTAL"); do
+            DAY=$(( RANDOM % SPREAD ))
+            HOUR=$(( RANDOM % 24 ))
+            MIN=$(( RANDOM % 60 ))
+            SEC=$(( RANDOM % 60 ))
+            DATE=$(date -u -d "$DAY days ago $HOUR:$MIN:$SEC" "+%Y-%m-%dT%H:%M:%SZ")
+            echo "commit $i @ $DATE" >> commits/log.txt
+            git add commits/log.txt
+            GIT_AUTHOR_DATE="$DATE" GIT_COMMITTER_DATE="$DATE" \
+              git commit -m "chore: random commit $i @ $DATE"
+          done
+
+      - name: Push
+        run: git push
